@@ -1,0 +1,73 @@
+import pandas as pd
+import numpy as np
+import pickle
+import os
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.preprocessing import LabelEncoder
+
+def train_models():
+    df = pd.read_csv("data/medical_data.csv")
+    X = df.drop("disease", axis=1)
+    y = df["disease"]
+
+    symptoms = list(X.columns)
+
+    le = LabelEncoder()
+    y_encoded = le.fit_transform(y)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+    )
+
+    models = {
+        "Decision Tree": DecisionTreeClassifier(max_depth=10, random_state=42),
+        "Naive Bayes": GaussianNB(),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
+    }
+
+    results = {}
+    best_acc = 0
+    best_model = None
+    best_name = ""
+
+    print("=" * 50)
+    print("Model Training Results")
+    print("=" * 50)
+
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        cv_scores = cross_val_score(model, X, y_encoded, cv=5)
+        results[name] = {"accuracy": acc, "cv_mean": cv_scores.mean(), "cv_std": cv_scores.std()}
+        print(f"\n{name}")
+        print(f"  Test Accuracy : {acc:.4f} ({acc*100:.2f}%)")
+        print(f"  CV Mean       : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+        if acc > best_acc:
+            best_acc = acc
+            best_model = model
+            best_name = name
+
+    print(f"\n{'='*50}")
+    print(f"Best Model: {best_name} ({best_acc*100:.2f}%)")
+
+    os.makedirs("models", exist_ok=True)
+    with open("models/best_model.pkl", "wb") as f:
+        pickle.dump(best_model, f)
+    with open("models/label_encoder.pkl", "wb") as f:
+        pickle.dump(le, f)
+    with open("models/symptoms_list.pkl", "wb") as f:
+        pickle.dump(symptoms, f)
+    with open("models/all_models.pkl", "wb") as f:
+        pickle.dump(models, f)
+
+    print("\nModels saved to /models/")
+    return results
+
+if __name__ == "__main__":
+    train_models()
+
